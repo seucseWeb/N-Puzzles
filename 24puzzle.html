@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>24 Puzzle Game</title>
+<style>
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    background-color: #f0f0f0;
+  }
+
+  #game-board {
+    display: grid;
+    grid-template-columns: repeat(5, 100px);
+    grid-template-rows: repeat(5, 100px);
+    gap: 5px;
+  }
+
+  .tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    background-color: #ffca6e;
+    color: #000000; /* 将字体颜色改为黑色 */
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  #shuffle-button, #toggle-slide-button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  #timer {
+    margin-top: 20px;
+    font-size: 18px;
+  }
+
+  #message {
+    margin-top: 20px;
+    font-size: 20px;
+    color: green;
+  }
+</style>
+</head>
+<body>
+<div id="game-board"></div>
+<button id="shuffle-button">点击开始游戏</button>
+<button id="toggle-slide-button">开启滑动操作</button>
+<div id="timer">用时: 0.000s</div>
+<div id="message"></div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const gameBoard = document.getElementById('game-board');
+  const shuffleButton = document.getElementById('shuffle-button');
+  const toggleSlideButton = document.getElementById('toggle-slide-button');
+  const timerElement = document.getElementById('timer');
+  const messageElement = document.getElementById('message');
+  let tiles = [];
+  let timer;
+  let startTime;
+  let isSlideEnabled = false; // 开关状态
+
+  const colorMapping = {
+    1: 'rgb(255, 168, 141)',   // 外层第一圈 - 粉红色
+    2: 'rgb(255, 168, 141)',
+    3: 'rgb(255, 168, 141)',
+    4: 'rgb(255, 168, 141)',
+    5: 'rgb(255, 168, 141)',
+    6: 'rgb(253, 77, 80)',     // 内层第一圈 - 深红色
+    11: 'rgb(253, 77, 80)',
+    16: 'rgb(253, 77, 80)',
+    21: 'rgb(253, 77, 80)',
+    7: 'rgb(255, 210, 67)',    // 第二层 - 浅黄色
+    8: 'rgb(255, 210, 67)',
+    9: 'rgb(255, 210, 67)',
+    10: 'rgb(255, 210, 67)',
+    12: 'rgb(255, 163, 26)',    // 第三层 - 橙黄色
+    17: 'rgb(255, 163, 26)',
+    22: 'rgb(255, 163, 26)',
+    13: 'rgb(158, 217, 163)',   // 第四层 - 浅绿色
+    14: 'rgb(158, 217, 163)',
+    15: 'rgb(158, 217, 163)',
+    18: 'rgb(118, 200, 124)',   // 最内层 - 中绿色
+    23: 'rgb(118, 200, 124)',
+    19: 'rgb(120, 216, 254)',   // 最内层 - 浅蓝色
+    20: 'rgb(120, 216, 254)',
+    24: 'rgb(92, 185, 254)'                  // 空白格不需要颜色
+  };
+
+  const initGame = () => {
+    for (let i = 1; i <= 24; i++) {
+      const tile = document.createElement('div');
+      tile.classList.add('tile');
+      tile.textContent = i;
+      tile.style.backgroundColor = colorMapping[i] || '#ffffff'; // Apply background color based on number
+      tile.addEventListener('click', () => moveTile(i));
+      if (isSlideEnabled) {
+        tile.addEventListener('mouseenter', () => moveTile(i)); // 滑动事件
+      }
+      tiles.push(tile);
+      gameBoard.appendChild(tile);
+    }
+    tiles.push(null); // Represent the empty space
+    renderBoard();
+  };
+
+  const shuffleBoard = () => {
+    for (let i = 0; i < 1000; i++) {
+      const movableTiles = getMovableTiles();
+      const randomTile = movableTiles[Math.floor(Math.random() * movableTiles.length)];
+      moveTile(randomTile.textContent);
+    }
+    resetTimer();
+    startTimer();
+  };
+
+  const moveTile = (tileValue) => {
+    const tileIndex = tiles.findIndex(tile => tile && tile.textContent == tileValue);
+    const emptyIndex = tiles.findIndex(tile => tile === null);
+
+    if (isAdjacent(tileIndex, emptyIndex)) {
+      [tiles[tileIndex], tiles[emptyIndex]] = [tiles[emptyIndex], tiles[tileIndex]];
+      renderBoard();
+      if (isSolved()) {
+        clearInterval(timer);
+        messageElement.textContent = "恭喜！你完成了游戏";
+      }
+    }
+  };
+
+  const getMovableTiles = () => {
+    const emptyIndex = tiles.findIndex(tile => tile === null);
+    const adjacentIndices = getAdjacentIndices(emptyIndex);
+    return adjacentIndices.map(index => tiles[index]).filter(tile => tile);
+  };
+
+  const getAdjacentIndices = (index) => {
+    const row = Math.floor(index / 5);
+    const col = index % 5;
+    const adjacentIndices = [];
+
+    if (row > 0) adjacentIndices.push(index - 5);
+    if (row < 4) adjacentIndices.push(index + 5);
+    if (col > 0) adjacentIndices.push(index - 1);
+    if (col < 4) adjacentIndices.push(index + 1);
+
+    return adjacentIndices;
+  };
+
+  const isAdjacent = (index1, index2) => {
+    const row1 = Math.floor(index1 / 5);
+    const col1 = index1 % 5;
+    const row2 = Math.floor(index2 / 5);
+    const col2 = index2 % 5;
+
+    return (row1 === row2 && Math.abs(col1 - col2) === 1) || (col1 === col2 && Math.abs(row1 - row2) === 1);
+  };
+
+  const renderBoard = () => {
+    gameBoard.innerHTML = '';
+    tiles.forEach(tile => {
+      if (tile) {
+        gameBoard.appendChild(tile);
+      } else {
+        const emptyTile = document.createElement('div');
+        emptyTile.classList.add('tile');
+        emptyTile.style.visibility = 'hidden';
+        gameBoard.appendChild(emptyTile);
+      }
+    });
+  };
+
+  const isSolved = () => {
+    for (let i = 0; i < 24; i++) {
+      if (!tiles[i] || tiles[i].textContent != (i + 1)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const startTimer = () => {
+    startTime = performance.now();
+    timer = setInterval(() => {
+      const currentTime = performance.now();
+      const elapsedTime = (currentTime - startTime) / 1000;
+      timerElement.textContent = `用时: ${elapsedTime.toFixed(3)}s`;
+    }, 100);
+  };
+
+  const resetTimer = () => {
+    clearInterval(timer);
+    timerElement.textContent = '用时: 0.000s';
+    messageElement.textContent = '';
+  };
+
+  const toggleSlide = () => {
+    isSlideEnabled = !isSlideEnabled;
+    toggleSlideButton.textContent = isSlideEnabled ? '关闭滑动操作' : '开启滑动操作';
+    resetTimer(); // 重置计时器
+    resetBoard();
+  };
+
+  const resetBoard = () => {
+    tiles = [];
+    gameBoard.innerHTML = '';
+    initGame();
+  };
+
+  shuffleButton.addEventListener('click', shuffleBoard);
+  toggleSlideButton.addEventListener('click', toggleSlide);
+  initGame();
+});
+</script>
+</body>
+</html>
